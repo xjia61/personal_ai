@@ -74,3 +74,103 @@ export async function sendMessage(
   await checkResponse(response);
   return response.json();
 }
+
+export interface JobProfile {
+  id: number;
+  resume_text: string;
+  target_roles: string[];
+  preferred_locations: string[];
+
+  remote_ok: boolean;
+  posted_within_days: number;
+  min_match_score: number;
+
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Job {
+  id: number;
+
+  title: string;
+  company: string | null;
+  location: string | null;
+
+  source: string;
+  source_url: string;
+
+  posted_date_text: string | null;
+  snippet: string | null;
+
+  match_score: number;
+  freshness_score: number;
+  location_score: number;
+  final_score: number;
+
+  status: string;
+
+  created_at: string;
+  updated_at: string;
+}
+
+
+export async function getJobProfile(): Promise<JobProfile> {
+  const response = await fetch(
+    `${API_URL}/job-profile`
+  );
+
+  await checkResponse(response);
+
+  return response.json();
+}
+
+
+export async function saveJobProfile(
+  profile: Omit<
+    JobProfile,
+    "id" | "created_at" | "updated_at"
+  >
+): Promise<JobProfile> {
+
+  const response = await fetch(
+    `${API_URL}/job-profile`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(profile),
+    }
+  );
+
+  await checkResponse(response);
+
+  return response.json();
+}
+
+
+export async function findJobs(): Promise<Job[]> {
+
+  const response = await fetch(
+    `${API_URL}/jobs/search`,
+    {
+      method: "POST",
+    }
+  );
+
+  await checkResponse(response);
+
+  return response.json();
+}
+
+
+export async function getJobs(): Promise<Job[]> {
+
+  const response = await fetch(
+    `${API_URL}/jobs`
+  );
+
+  await checkResponse(response);
+
+  return response.json();
+}

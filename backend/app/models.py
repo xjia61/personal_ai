@@ -2,7 +2,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, JSON, Float, Integer
 from app.database import Base
+
 
 
 def utcnow() -> datetime:
@@ -18,6 +20,15 @@ class Conversation(Base):
     retention_type: Mapped[str] = mapped_column(String(30), default="save")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    project_id: Mapped[int | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+
+    project: Mapped["Project | None"] = relationship(
+        back_populates="conversations",
+    )
 
     messages: Mapped[list["Message"]] = relationship(
         back_populates="conversation",
@@ -41,3 +52,146 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
+
+class Project(Base):
+    __tablename__ = "projects"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+    conversations: Mapped[list["Conversation"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
+class JobProfile(Base):
+    __tablename__ = "job_profiles"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    resume_text: Mapped[str] = mapped_column(Text, default="")
+
+    target_roles: Mapped[list[str]] = mapped_column(
+        JSON,
+        default=list,
+    )
+
+    preferred_locations: Mapped[list[str]] = mapped_column(
+        JSON,
+        default=list,
+    )
+
+    remote_ok: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+    )
+
+    posted_within_days: Mapped[int] = mapped_column(
+        Integer,
+        default=14,
+    )
+
+    min_match_score: Mapped[float] = mapped_column(
+        Float,
+        default=60,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+
+class Job(Base):
+    __tablename__ = "jobs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    title: Mapped[str] = mapped_column(String(300))
+    company: Mapped[str | None] = mapped_column(
+        String(200),
+        nullable=True,
+    )
+    location: Mapped[str | None] = mapped_column(
+        String(200),
+        nullable=True,
+    )
+
+    source: Mapped[str] = mapped_column(
+        String(50),
+        default="tavily",
+    )
+
+    source_url: Mapped[str] = mapped_column(
+        Text,
+        unique=True,
+    )
+
+    posted_date_text: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    snippet: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    match_score: Mapped[float] = mapped_column(
+        Float,
+        default=0,
+    )
+
+    freshness_score: Mapped[float] = mapped_column(
+        Float,
+        default=0,
+    )
+
+    location_score: Mapped[float] = mapped_column(
+        Float,
+        default=0,
+    )
+
+    final_score: Mapped[float] = mapped_column(
+        Float,
+        default=0,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(30),
+        default="new",
+    )
+
+    last_seen: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
