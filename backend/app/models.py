@@ -80,6 +80,29 @@ class JobProfile(Base):
     __tablename__ = "job_profiles"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    first_name: Mapped[str] = mapped_column(
+        String(100), default=""
+    )
+
+    last_name: Mapped[str] = mapped_column(
+        String(100), default=""
+    )
+
+    email: Mapped[str] = mapped_column(
+        String(200), default=""
+    )
+
+    phone: Mapped[str] = mapped_column(
+        String(50), default=""
+    )
+
+    linkedin_url: Mapped[str] = mapped_column(
+        Text, default=""
+    )
+
+    resume_file_path: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
 
     resume_text: Mapped[str] = mapped_column(Text, default="")
 
@@ -194,4 +217,13 @@ class Job(Base):
         DateTime(timezone=True),
         default=utcnow,
         onupdate=utcnow,
+    )
+    application_url: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    link_status: Mapped[str] = mapped_column(
+        String(32),
+        default="unverified",
     )

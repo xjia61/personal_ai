@@ -77,6 +77,11 @@ export async function sendMessage(
 
 export interface JobProfile {
   id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  linkedin_url: string;
   resume_text: string;
   target_roles: string[];
   preferred_locations: string[];
@@ -106,6 +111,9 @@ export interface Job {
   freshness_score: number;
   location_score: number;
   final_score: number;
+
+  application_url: string | null;
+  link_status: string;
 
   status: string;
 
@@ -173,4 +181,94 @@ export async function getJobs(): Promise<Job[]> {
   await checkResponse(response);
 
   return response.json();
+}
+
+export async function resolveJobLink(
+  jobId: number
+): Promise<Job> {
+
+  const response = await fetch(
+    `${API_URL}/jobs/${jobId}/resolve`,
+    { method: "POST" }
+  );
+
+  await checkResponse(response);
+  return response.json();
+}
+
+
+export async function setApplicationLink(
+  jobId: number,
+  url: string
+): Promise<Job> {
+
+  const response = await fetch(
+    `${API_URL}/jobs/${jobId}/application-link`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        application_url: url,
+      }),
+    }
+  );
+
+  await checkResponse(response);
+  return response.json();
+}
+
+
+export async function prepareApplication(
+  jobId: number
+): Promise<{ state: string }> {
+
+  const response = await fetch(
+    `${API_URL}/jobs/${jobId}/prepare`,
+    { method: "POST" }
+  );
+
+  await checkResponse(response);
+  return response.json();
+}
+
+
+export async function updateJobStatus(
+  jobId: number,
+  status: string
+): Promise<Job> {
+
+  const response = await fetch(
+    `${API_URL}/jobs/${jobId}/status`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ status }),
+    }
+  );
+
+  await checkResponse(response);
+  return response.json();
+}
+
+
+export async function uploadResume(
+  file: File
+): Promise<void> {
+
+  const form = new FormData();
+  form.append("file", file);
+
+  const response = await fetch(
+    `${API_URL}/job-profile/resume`,
+    {
+      method: "POST",
+      body: form,
+    }
+  );
+
+  await checkResponse(response);
 }

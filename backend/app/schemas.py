@@ -70,6 +70,11 @@ class JobProfileOut(JobProfileUpdate):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    first_name: str = ""
+    last_name: str = ""
+    email: str = ""
+    phone: str = ""
+    linkedin_url: str = ""
     created_at: datetime
     updated_at: datetime
 
@@ -81,6 +86,9 @@ class JobOut(BaseModel):
     title: str
     company: str | None
     location: str | None
+
+    application_url: str | None
+    link_status: str
 
     source: str
     source_url: str
@@ -96,3 +104,21 @@ class JobOut(BaseModel):
 
     created_at: datetime
     updated_at: datetime
+
+    
+
+
+class ApplicationLinkUpdate(BaseModel):
+    application_url: str
+
+
+class JobStatusUpdate(BaseModel):
+    status: Literal[
+        "new",
+        "saved",
+        "applied",
+        "interview",
+        "rejected",
+        "offer",
+        "ignored",
+    ]

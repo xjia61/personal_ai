@@ -357,3 +357,9 @@ select {
   cursor: pointer;
   color: inherit;
 }
+
+.job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}

@@ -6,3 +6,5 @@ httpx
 
 sqlalchemy[asyncio]>=2.0,<2.2
 asyncpg
+playwright
+python-multipart
