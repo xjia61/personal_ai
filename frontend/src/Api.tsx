@@ -343,3 +343,83 @@ export async function deleteCareerRecord(
     throw new Error("Failed to delete career record");
   }
 }
+
+export interface ResumeInput {
+  name: string;
+  content: string;
+  role_tags: string[];
+  skill_tags: string[];
+}
+
+export interface ResumeVersion extends ResumeInput {
+  id: number;
+  profile_id: number;
+  family_id: string;
+  version: number;
+  status: "draft" | "approved";
+  based_on_resume_id: number | null;
+  source_profile_hash: string | null;
+  created_at: string;
+  approved_at: string | null;
+  profile_changed: boolean;
+}
+
+const RESUMES_URL =
+  "http://127.0.0.1:8000/api/resumes";
+
+async function resumeRequest<T>(
+  url: string,
+  method = "GET",
+  body?: ResumeInput
+): Promise<T> {
+  const response = await fetch(url, {
+    method,
+    headers: body
+      ? { "Content-Type": "application/json" }
+      : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+
+  return response.json();
+}
+
+export function getResumeVersions() {
+  return resumeRequest<ResumeVersion[]>(RESUMES_URL);
+}
+
+export function createResume(data: ResumeInput) {
+  return resumeRequest<ResumeVersion>(
+    RESUMES_URL,
+    "POST",
+    data
+  );
+}
+
+export function updateResume(
+  id: number,
+  data: ResumeInput
+) {
+  return resumeRequest<ResumeVersion>(
+    `${RESUMES_URL}/${id}`,
+    "PUT",
+    data
+  );
+}
+
+export function approveResume(id: number) {
+  return resumeRequest<ResumeVersion>(
+    `${RESUMES_URL}/${id}/approve`,
+    "POST"
+  );
+}
+
+export function createResumeRevision(id: number) {
+  return resumeRequest<ResumeVersion>(
+    `${RESUMES_URL}/${id}/new-version`,
+    "POST"
+  );
+}

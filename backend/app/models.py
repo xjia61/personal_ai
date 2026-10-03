@@ -283,3 +283,72 @@ class CareerRecord(Base):
             default=utcnow,
             onupdate=utcnow,
         )
+
+
+
+from sqlalchemy import UniqueConstraint
+
+
+class ResumeVersion(Base):
+    __tablename__ = "resume_versions"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "family_id",
+            "version",
+            name="uq_resume_family_version",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    profile_id: Mapped[int] = mapped_column(
+        ForeignKey("job_profiles.id"),
+        index=True,
+    )
+
+    family_id: Mapped[str] = mapped_column(
+        String(36),
+        index=True,
+    )
+
+    version: Mapped[int] = mapped_column(Integer)
+
+    name: Mapped[str] = mapped_column(String(200))
+
+    content: Mapped[str] = mapped_column(Text)
+
+    role_tags: Mapped[list[str]] = mapped_column(
+        JSON,
+        default=list,
+    )
+
+    skill_tags: Mapped[list[str]] = mapped_column(
+        JSON,
+        default=list,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default="draft",
+    )
+
+    based_on_resume_id: Mapped[int | None] = mapped_column(
+        ForeignKey("resume_versions.id"),
+        nullable=True,
+    )
+
+    source_profile_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+    )
+
+    approved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )

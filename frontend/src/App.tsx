@@ -9,6 +9,7 @@ import {
 } from "./Api";
 import JobsPage from "./components/JobsPage";
 import CareerPage from "./components/CareerPage";
+import ResumePage from "./components/Resumepage";
 import "./App.css";
 
 type LocalMessage = Pick<Message, "role" | "content">;
@@ -21,7 +22,7 @@ function App() {
   const [mode, setMode] = useState<RetentionMode>("save");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [page, setPage] = useState<"chat" | "jobs" | "career">("chat");
+  const [page, setPage] = useState<"chat" | "jobs" | "career" | "resume" >("chat");
 
   useEffect(() => {
     refreshConversations();
@@ -147,6 +148,10 @@ function App() {
             Career Profile
           </button>
 
+          <button onClick={() => setPage("resume")}>
+            Resume Library
+          </button>
+
         </div>
 
         {/* Chat history */}
@@ -188,7 +193,9 @@ function App() {
 
       {/* Main content */}
 
-      {page === "career" ?(
+      {page === "resume" ?(
+        <ResumePage />
+      ):page === "career" ?(
         <CareerPage />
 
       ) : page === "jobs" ? (

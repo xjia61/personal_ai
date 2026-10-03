@@ -164,3 +164,35 @@ class CareerRecordOut(CareerRecordCreate):
 
     created_at: datetime
     updated_at: datetime
+
+
+
+from typing import Literal
+
+
+class ResumeInput(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    content: str = Field(min_length=1)
+
+    role_tags: list[str] = Field(default_factory=list)
+    skill_tags: list[str] = Field(default_factory=list)
+
+
+class ResumeOut(ResumeInput):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    profile_id: int
+
+    family_id: str
+    version: int
+
+    status: Literal["draft", "approved"]
+
+    based_on_resume_id: int | None
+    source_profile_hash: str | None
+
+    created_at: datetime
+    approved_at: datetime | None
+
+    profile_changed: bool = False
