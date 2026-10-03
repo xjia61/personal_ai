@@ -227,3 +227,59 @@ class Job(Base):
         String(32),
         default="unverified",
     )
+
+class CareerRecord(Base):
+        __tablename__ = "career_records"
+
+        id: Mapped[int] = mapped_column(
+            primary_key=True
+        )
+
+        profile_id: Mapped[int] = mapped_column(
+            ForeignKey("job_profiles.id", ondelete="CASCADE"),
+            index=True,
+        )
+
+        category: Mapped[str] = mapped_column(
+            String(30)
+        )
+
+        title: Mapped[str] = mapped_column(
+            String(300)
+        )
+
+        organization: Mapped[str | None] = mapped_column(
+            String(300),
+            nullable=True,
+        )
+
+        start_date: Mapped[str | None] = mapped_column(
+            String(20),
+            nullable=True,
+        )
+
+        end_date: Mapped[str | None] = mapped_column(
+            String(20),
+            nullable=True,
+        )
+
+        description: Mapped[str] = mapped_column(
+            Text,
+            default="",
+        )
+
+        skills: Mapped[list[str]] = mapped_column(
+            JSON,
+            default=list,
+        )
+
+        created_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True),
+            default=utcnow,
+        )
+
+        updated_at: Mapped[datetime] = mapped_column(
+            DateTime(timezone=True),
+            default=utcnow,
+            onupdate=utcnow,
+        )

@@ -8,6 +8,7 @@ import {
   type RetentionMode,
 } from "./Api";
 import JobsPage from "./components/JobsPage";
+import CareerPage from "./components/CareerPage";
 import "./App.css";
 
 type LocalMessage = Pick<Message, "role" | "content">;
@@ -20,7 +21,7 @@ function App() {
   const [mode, setMode] = useState<RetentionMode>("save");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [page, setPage] = useState<"chat" | "jobs">("chat");
+  const [page, setPage] = useState<"chat" | "jobs" | "career">("chat");
 
   useEffect(() => {
     refreshConversations();
@@ -142,6 +143,10 @@ function App() {
             💼 Jobs
           </button>
 
+          <button onClick={() => setPage("career")}>
+            Career Profile
+          </button>
+
         </div>
 
         {/* Chat history */}
@@ -183,7 +188,10 @@ function App() {
 
       {/* Main content */}
 
-      {page === "jobs" ? (
+      {page === "career" ?(
+        <CareerPage />
+
+      ) : page === "jobs" ? (
 
         /* Jobs Page */
         <main className="chat">

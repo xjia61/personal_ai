@@ -272,3 +272,74 @@ export async function uploadResume(
 
   await checkResponse(response);
 }
+
+export type CareerCategory =
+  | "education"
+  | "work"
+  | "project"
+  | "skill"
+  | "certification";
+
+export interface CareerRecordInput {
+  category: CareerCategory;
+  title: string;
+  organization: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  description: string;
+  skills: string[];
+}
+
+export interface CareerRecord extends CareerRecordInput {
+  id: number;
+  profile_id: number;
+  created_at: string;
+  updated_at: string;
+}
+
+const CAREER_URL =
+  "http://127.0.0.1:8000/api/career/records";
+
+export async function getCareerRecords(): Promise<CareerRecord[]> {
+  const response = await fetch(CAREER_URL);
+
+  if (!response.ok) {
+    throw new Error("Failed to load career records");
+  }
+
+  return response.json();
+}
+
+export async function saveCareerRecord(
+  data: CareerRecordInput,
+  id?: number
+): Promise<CareerRecord> {
+  const response = await fetch(
+    id === undefined ? CAREER_URL : `${CAREER_URL}/${id}`,
+    {
+      method: id === undefined ? "POST" : "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to save career record");
+  }
+
+  return response.json();
+}
+
+export async function deleteCareerRecord(
+  id: number
+): Promise<void> {
+  const response = await fetch(`${CAREER_URL}/${id}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to delete career record");
+  }
+}

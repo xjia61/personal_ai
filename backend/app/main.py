@@ -10,6 +10,8 @@ from app.routers.jobs import router as jobs_router
 from time import perf_counter
 from fastapi import Request
 
+from app.routers.career import router as career_router
+
 from app.core.logging_config import setup_logging
 
 
@@ -62,6 +64,7 @@ app.include_router(chat_router)
 app.include_router(conversations_router)
 app.include_router(search_router)
 app.include_router(jobs_router)
+app.include_router(career_router)
 
 
 @app.get("/health")

@@ -122,3 +122,45 @@ class JobStatusUpdate(BaseModel):
         "offer",
         "ignored",
     ]
+
+from typing import Literal
+
+
+class CareerRecordCreate(BaseModel):
+
+    category: Literal[
+        "education",
+        "work",
+        "project",
+        "skill",
+        "certification",
+    ]
+
+    title: str = Field(
+        min_length=1,
+        max_length=300,
+    )
+
+    organization: str | None = None
+
+    start_date: str | None = None
+    end_date: str | None = None
+
+    description: str = ""
+
+    skills: list[str] = Field(
+        default_factory=list
+    )
+
+
+class CareerRecordOut(CareerRecordCreate):
+
+    model_config = ConfigDict(
+        from_attributes=True
+    )
+
+    id: int
+    profile_id: int
+
+    created_at: datetime
+    updated_at: datetime
