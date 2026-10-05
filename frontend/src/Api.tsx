@@ -423,3 +423,35 @@ export function createResumeRevision(id: number) {
     "POST"
   );
 }
+
+export async function importResume(
+  file: File
+): Promise<ResumeVersion> {
+  const form = new FormData();
+
+  form.append("file", file);
+
+  const response = await fetch(
+    "http://127.0.0.1:8000/api/resumes/import",
+    {
+      method: "POST",
+      body: form,
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+
+  return response.json();
+}
+
+export function getResumeDownloadUrl(
+  id: number,
+  format: "pdf" | "docx"
+): string {
+  return (
+    `http://127.0.0.1:8000/api/resumes/` +
+    `${id}/export/${format}`
+  );
+}

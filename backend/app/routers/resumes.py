@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -15,6 +16,17 @@ from app.models import (
     ResumeVersion,
 )
 from app.schemas import ResumeInput, ResumeOut
+
+from pathlib import Path
+
+from fastapi import File, UploadFile, Response
+
+from app.services.resume_files import extract_resume_text
+
+from app.services.resume_export import (
+    build_resume_docx,
+    build_resume_pdf,
+)
 
 
 router = APIRouter(
@@ -249,4 +261,154 @@ async def create_new_version(
     return to_output(
         new_resume,
         await get_profile_hash(db),
+    )
+
+
+MAX_UPLOAD_SIZE = 5 * 1024 * 1024
+
+
+@router.post("/import", response_model=ResumeOut)
+async def import_resume(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    filename = Path(file.filename or "").name
+    extension = Path(filename).suffix.lower()
+
+    if extension not in {".pdf", ".docx"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Please upload a PDF or DOCX file",
+        )
+
+    raw = await file.read(MAX_UPLOAD_SIZE + 1)
+    await file.close()
+
+    if not raw or len(raw) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail="File must be between 1 byte and 5 MB",
+        )
+
+    try:
+        content = extract_resume_text(raw, filename)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Unable to extract resume text. "
+                "Check that the file is valid and contains "
+                "selectable text."
+            ),
+        ) from exc
+
+    profile = await db.get(JobProfile, 1)
+
+    if profile is None:
+        profile = JobProfile(id=1)
+        db.add(profile)
+        await db.flush()
+
+    resume = ResumeVersion(
+        profile_id=1,
+        family_id=str(uuid4()),
+        version=1,
+        name=Path(filename).stem[:200],
+        content=content,
+        role_tags=[],
+        skill_tags=[],
+        status="draft",
+    )
+
+    db.add(resume)
+
+    await db.commit()
+    await db.refresh(resume)
+
+    return to_output(
+        resume,
+        await get_profile_hash(db),
+    )
+
+def safe_filename(name: str) -> str:
+    cleaned = re.sub(
+        r"[^A-Za-z0-9._-]+",
+        "_",
+        name,
+    )
+
+    cleaned = cleaned.strip("._")
+
+    return cleaned or "resume"
+
+@router.get("/{resume_id}/export/docx")
+async def export_resume_docx(
+    resume_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    resume = await db.get(
+        ResumeVersion,
+        resume_id,
+    )
+
+    if resume is None or resume.profile_id != 1:
+        raise HTTPException(
+            status_code=404,
+            detail="Resume not found",
+        )
+
+    content = build_resume_docx(
+        resume.content
+    )
+
+    filename = (
+        f"{safe_filename(resume.name)}"
+        f"_v{resume.version}.docx"
+    )
+
+    return Response(
+        content=content,
+        media_type=(
+            "application/vnd.openxmlformats-"
+            "officedocument.wordprocessingml.document"
+        ),
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="{filename}"'
+        },
+    )
+
+
+@router.get("/{resume_id}/export/pdf")
+async def export_resume_pdf(
+    resume_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    resume = await db.get(
+        ResumeVersion,
+        resume_id,
+    )
+
+    if resume is None or resume.profile_id != 1:
+        raise HTTPException(
+            status_code=404,
+            detail="Resume not found",
+        )
+
+    content = build_resume_pdf(
+        resume.content
+    )
+
+    filename = (
+        f"{safe_filename(resume.name)}"
+        f"_v{resume.version}.pdf"
+    )
+
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="{filename}"'
+        },
     )

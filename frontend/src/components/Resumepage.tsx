@@ -7,6 +7,8 @@ import {
   updateResume,
   approveResume,
   createResumeRevision,
+  importResume,
+  getResumeDownloadUrl,
 } from "../Api";
 
 import type {
@@ -100,6 +102,24 @@ export default function ResumePage() {
     }
   }
 
+  async function handleImport(file: File) {
+    setBusy(true);
+    setError("");
+
+    try {
+        const resume = await importResume(file);
+
+        await refresh();
+
+        // 导入后直接打开草稿，方便检查和修改
+        edit(resume);
+    } catch (err) {
+        setError(String(err));
+    } finally {
+        setBusy(false);
+    }
+    }
+
   async function runAction(
     action: () => Promise<ResumeVersion>,
     editResult = false
@@ -124,6 +144,7 @@ export default function ResumePage() {
   }
 
   return (
+    
     <div
       style={{
         maxWidth: 900,
@@ -145,6 +166,29 @@ export default function ResumePage() {
           {error}
         </p>
       )}
+
+      <div style={{ marginBottom: 24 }}>
+        <h3>Import Existing Resume</h3>
+
+        <input
+            type="file"
+            accept=".pdf,.docx"
+            disabled={busy}
+            onChange={(event) => {
+            const file = event.target.files?.[0];
+
+            if (file) {
+                void handleImport(file);
+            }
+
+            event.target.value = "";
+            }}
+        />
+
+        <p>
+            Upload a PDF or DOCX file (maximum 5 MB).
+        </p>
+        </div>
 
       <form
         onSubmit={save}
@@ -256,6 +300,7 @@ export default function ResumePage() {
           <p>
             Status: <strong>{resume.status}</strong>
           </p>
+         
 
           {resume.profile_changed && (
             <p style={{ color: "#b7791f" }}>
@@ -328,7 +373,31 @@ export default function ResumePage() {
               >
                 Create New Version
               </button>
+
+              
             )}
+             {/*zheli dui ma*/}
+             <a
+                href={getResumeDownloadUrl(
+                    resume.id,
+                    "docx"
+                )}
+                >
+                <button type="button">
+                    Download DOCX
+                </button>
+                </a>
+
+                <a
+                href={getResumeDownloadUrl(
+                    resume.id,
+                    "pdf"
+                )}
+                >
+                <button type="button">
+                    Download PDF
+                </button>
+                </a>
           </div>
         </div>
       ))}
