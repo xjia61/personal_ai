@@ -119,17 +119,316 @@ def valid_url(url: str) -> bool:
     )
 
 
+
 async def search_jobs(
     db: AsyncSession,
-    profile: JobProfile,
+    keywords: list[str],
+    locations: list[str],
+    posted_within_days: int,
+    remote_ok: bool,
+    min_relevance_score: int,
 ) -> list[Job]:
 
-    if not profile.resume_text.strip():
+    # Clean user input
+    clean_keywords = [
+        keyword.strip()
+        for keyword in keywords
+        if keyword.strip()
+    ]
+
+    clean_locations = [
+        location.strip()
+        for location in locations
+        if location.strip()
+    ]
+
+    if not clean_keywords:
         raise ValueError(
-            "Please save your resume first."
+            "Please enter at least one job keyword."
         )
 
-    queries = build_queries(profile)
+    # -----------------------------------
+    # 1. Build search queries
+    # -----------------------------------
+
+    queries: list[str] = []
+
+    for keyword in clean_keywords:
+
+        # If locations were supplied, search each combination.
+        if clean_locations:
+
+            for location in clean_locations:
+
+                if location.lower() == "remote":
+                    query = f'"{keyword}" remote job'
+                else:
+                    query = (
+                        f'"{keyword}" "{location}" job'
+                    )
+
+                queries.append(query)
+
+        else:
+
+            queries.append(
+                f'"{keyword}" job'
+            )
+
+    # Avoid unexpectedly large numbers of web calls.
+    queries = queries[:8]
+
+    # -----------------------------------
+    # 2. Search Tavily
+    # -----------------------------------
+
+    candidates: dict[str, dict] = {}
+
+    for query in queries:
+
+        results = await search_web(
+            query=query,
+            max_results=5,
+            time_range=time_range_for_days(
+                posted_within_days
+            ),
+        )
+
+        for result in results:
+
+            url = result.get("url", "")
+
+            if not valid_url(url):
+                continue
+
+            # Deduplicate by URL
+            candidates[url] = result
+
+    if not candidates:
+        return []
+
+    # -----------------------------------
+    # 3. Cheap keyword relevance
+    # -----------------------------------
+
+    matched_jobs: list[Job] = []
+
+    for result in candidates.values():
+
+        url = result["url"]
+
+        title = (
+            result.get("title") or ""
+        ).strip()
+
+        snippet = (
+            result.get("content") or ""
+        ).strip()
+
+        searchable_text = (
+            f"{title} {snippet}"
+        ).lower()
+
+        # -----------------------------------
+        # Keyword relevance
+        # -----------------------------------
+
+        matched_keywords = [
+            keyword
+            for keyword in clean_keywords
+            if keyword.lower()
+            in searchable_text
+        ]
+
+        if not matched_keywords:
+            continue
+
+        keyword_score = (
+            len(matched_keywords)
+            / len(clean_keywords)
+        ) * 100
+
+        # Give an extra boost when a target role
+        # appears directly in the page title.
+        title_matches = [
+            keyword
+            for keyword in clean_keywords
+            if keyword.lower()
+            in title.lower()
+        ]
+
+        if title_matches:
+            relevance_score = (
+                keyword_score * 0.6
+                + 100 * 0.4
+            )
+        else:
+            relevance_score = (
+                keyword_score * 0.8
+                + 50 * 0.2
+            )
+
+        relevance_score = max(
+            0,
+            min(100, relevance_score),
+        )
+
+        if relevance_score < min_relevance_score:
+            continue
+
+        # -----------------------------------
+        # Location filter
+        # -----------------------------------
+
+        location_score: float | None = None
+
+        if clean_locations:
+
+            location_matches = [
+                location
+                for location in clean_locations
+                if location.lower()
+                in searchable_text
+            ]
+
+            remote_requested = (
+                remote_ok
+                and "remote" in searchable_text
+            )
+
+            if location_matches or remote_requested:
+                location_score = 100
+            else:
+                # Do not automatically discard jobs
+                # when location metadata is unclear.
+                location_score = None
+
+        # -----------------------------------
+        # Freshness
+        # -----------------------------------
+
+        posted = result.get(
+            "published_date"
+        )
+
+        fresh = get_freshness(
+            posted,
+            posted_within_days,
+        )
+
+        # If we have an explicit date and it is stale,
+        # skip the posting.
+        if fresh == 0:
+            continue
+
+        # -----------------------------------
+        # Final score
+        # -----------------------------------
+
+        weighted_scores = [
+            (relevance_score, 0.70)
+        ]
+
+        if fresh is not None:
+            weighted_scores.append(
+                (fresh, 0.20)
+            )
+
+        if location_score is not None:
+            weighted_scores.append(
+                (location_score, 0.10)
+            )
+
+        final_score = (
+            sum(
+                score * weight
+                for score, weight
+                in weighted_scores
+            )
+            /
+            sum(
+                weight
+                for _, weight
+                in weighted_scores
+            )
+        )
+
+        # -----------------------------------
+        # Upsert Job
+        # -----------------------------------
+
+        existing = await db.execute(
+            select(Job).where(
+                Job.source_url == url
+            )
+        )
+
+        job = existing.scalar_one_or_none()
+
+        if job is None:
+
+            job = Job(
+                title=title,
+                source_url=url,
+                source="tavily",
+            )
+
+            db.add(job)
+
+        job.title = title
+
+        # We currently do not ask AI to infer these.
+        # Preserve existing values if already available.
+        job.snippet = snippet
+        job.posted_date_text = posted
+
+        job.match_score = round(
+            relevance_score,
+            1,
+        )
+
+        job.freshness_score = round(
+            fresh
+            if fresh is not None
+            else 0,
+            1,
+        )
+
+        job.location_score = round(
+            location_score
+            if location_score is not None
+            else 0,
+            1,
+        )
+
+        job.final_score = round(
+            final_score,
+            1,
+        )
+
+        job.last_seen = utcnow()
+
+        matched_jobs.append(job)
+
+    await db.commit()
+
+    return sorted(
+        matched_jobs,
+        key=lambda job: (
+            job.final_score or 0
+        ),
+        reverse=True,
+    )
+
+    
+
+
+    
+
+
+    
+
+    queries = build_queries(keywords)
 
     if not queries:
         raise ValueError(
@@ -144,7 +443,7 @@ async def search_jobs(
             query=query,
             max_results=5,
             time_range=time_range_for_days(
-                profile.posted_within_days
+                keywords.posted_within_days
             ),
         )
 
@@ -184,7 +483,7 @@ async def search_jobs(
 
         fresh = get_freshness(
             posted,
-            profile.posted_within_days,
+            keywords.posted_within_days,
         )
 
         if fresh == 0:
@@ -192,7 +491,7 @@ async def search_jobs(
 
         loc_score = get_location_score(
             assessment.location,
-            profile,
+            keywords,
         )
 
         match = max(

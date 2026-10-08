@@ -156,20 +156,37 @@ export async function saveJobProfile(
   return response.json();
 }
 
+export interface JobSearchRequest {
+  keywords: string[];
+  locations: string[];
+  posted_within_days: number;
+  remote_ok: boolean;
+  min_relevance_score: number;
+}
 
-export async function findJobs(): Promise<Job[]> {
+export async function findJobs(
+  search: JobSearchRequest
+): Promise<Job[]> {
 
   const response = await fetch(
-    `${API_URL}/jobs/search`,
+    "http://127.0.0.1:8000/api/jobs/search",
     {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(search),
     }
   );
 
-  await checkResponse(response);
+  if (!response.ok) {
+    throw new Error("Job search failed");
+  }
 
   return response.json();
 }
+
+
 
 
 export async function getJobs(): Promise<Job[]> {
@@ -454,4 +471,53 @@ export function getResumeDownloadUrl(
     `http://127.0.0.1:8000/api/resumes/` +
     `${id}/export/${format}`
   );
+}
+
+
+export interface ResumeRecommendation {
+  resume_id: number | null;
+  resume_name: string | null;
+  version: number | null;
+
+  score: number;
+
+  action:
+    | "reuse"
+    | "tailor"
+    | "new";
+
+  role_score: number;
+  skill_score: number;
+
+  matched_skills: string[];
+}
+
+export async function recommendResume(
+  jobId: number
+): Promise<ResumeRecommendation> {
+  const response = await fetch(
+    `http://127.0.0.1:8000/api/resumes/recommend/job/${jobId}`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      "Failed to recommend resume"
+    );
+  }
+
+  return response.json();
+}
+
+export async function getJob(
+  jobId: number
+): Promise<Job> {
+  const response = await fetch(
+    `http://127.0.0.1:8000/api/jobs/${jobId}`
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to load job");
+  }
+
+  return response.json();
 }

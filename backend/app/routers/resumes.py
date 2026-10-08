@@ -27,6 +27,11 @@ from app.services.resume_export import (
     build_resume_docx,
     build_resume_pdf,
 )
+from app.models import Job
+
+from app.schemas import ResumeRecommendationOut
+
+from app.services.resume_matcher import score_resume
 
 
 router = APIRouter(
@@ -411,4 +416,81 @@ async def export_resume_pdf(
             "Content-Disposition":
                 f'attachment; filename="{filename}"'
         },
+    )
+
+@router.get(
+    "/recommend/job/{job_id}",
+    response_model=ResumeRecommendationOut,
+)
+async def recommend_resume(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    job = await db.get(Job, job_id)
+
+    if job is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Job not found",
+        )
+
+    result = await db.execute(
+        select(ResumeVersion).where(
+            ResumeVersion.profile_id == 1,
+            ResumeVersion.status == "approved",
+        )
+    )
+
+    resumes = list(result.scalars().all())
+
+    if not resumes:
+        return ResumeRecommendationOut(
+            resume_id=None,
+            resume_name=None,
+            version=None,
+            score=0,
+            action="new",
+            role_score=0,
+            skill_score=0,
+            matched_skills=[],
+        )
+
+    job_text = " ".join(
+        part
+        for part in [
+            job.title,
+            job.snippet or "",
+        ]
+        if part
+    )
+
+    ranked = []
+
+    for resume in resumes:
+        result_data = score_resume(
+            resume,
+            job.title,
+            job_text,
+        )
+
+        ranked.append(
+            (
+                result_data["score"],
+                resume,
+                result_data,
+            )
+        )
+
+    ranked.sort(
+        key=lambda item: item[0],
+        reverse=True,
+    )
+
+    _, resume, match = ranked[0]
+
+    return ResumeRecommendationOut(
+        resume_id=resume.id,
+        resume_name=resume.name,
+        version=resume.version,
+        **match,
     )

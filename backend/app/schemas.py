@@ -166,10 +166,6 @@ class CareerRecordOut(CareerRecordCreate):
     updated_at: datetime
 
 
-
-from typing import Literal
-
-
 class ResumeInput(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     content: str = Field(min_length=1)
@@ -196,3 +192,36 @@ class ResumeOut(ResumeInput):
     approved_at: datetime | None
 
     profile_changed: bool = False
+
+
+class ResumeRecommendationOut(BaseModel):
+    resume_id: int | None
+    resume_name: str | None
+    version: int | None
+
+    score: float
+    action: Literal[
+        "reuse",
+        "tailor",
+        "new",
+    ]
+
+    role_score: float
+    skill_score: float
+
+    matched_skills: list[str]
+
+class JobSearchRequest(BaseModel):
+    keywords: list[str] = Field(
+        default_factory=list
+    )
+
+    locations: list[str] = Field(
+        default_factory=list
+    )
+
+    posted_within_days: int = 14
+
+    remote_ok: bool = True
+
+    min_relevance_score: int = 60

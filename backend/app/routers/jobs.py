@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Job, JobProfile
+
 from app.schemas import (
     JobOut,
     JobProfileOut,
@@ -31,6 +32,12 @@ from app.services.application_service import (
     get_session,
     start_application,
 )
+
+from app.schemas import (
+    JobSearchRequest,
+    JobOut,
+)
+
 
 
 router = APIRouter(
@@ -116,29 +123,21 @@ async def update_job_profile(
     response_model=list[JobOut],
 )
 async def run_job_search(
+    data: JobSearchRequest,
     db: AsyncSession = Depends(get_db),
 ):
+    return await search_jobs(
+        db=db,
+        keywords=data.keywords,
+        locations=data.locations,
+        posted_within_days=data.posted_within_days,
+        remote_ok=data.remote_ok,
+        min_relevance_score=data.min_relevance_score,
+    )
 
-    profile = await get_profile(db)
+    
 
-    try:
-        return await search_jobs(
-            db,
-            profile,
-        )
-
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
-        ) from exc
-    except RuntimeError as exc:
-        print(f"AI ranking failed: {exc}")
-
-        raise HTTPException(
-            status_code=502,
-            detail="AI matching failed. Check backend logs.",
-        ) from exc
+    
 
 
 @router.get(
@@ -410,5 +409,24 @@ async def update_job_status(
 
     await db.commit()
     await db.refresh(job)
+
+    return job
+
+
+@router.get(
+    "/api/jobs/{job_id}",
+    response_model=JobOut,
+)
+async def get_job(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    job = await db.get(Job, job_id)
+
+    if job is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Job not found",
+        )
 
     return job
