@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, JSON, Float, Integer
+from sqlalchemy import UniqueConstraint
 from app.database import Base
 
 
@@ -286,8 +287,6 @@ class CareerRecord(Base):
 
 
 
-from sqlalchemy import UniqueConstraint
-
 
 class ResumeVersion(Base):
     __tablename__ = "resume_versions"
@@ -351,4 +350,79 @@ class ResumeVersion(Base):
     approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
+    )
+
+class JobRequirement(Base):
+    __tablename__ = "job_requirements"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "job_id",
+            "description_hash",
+            name="uq_job_requirement_hash",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True
+    )
+
+    job_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "jobs.id",
+            ondelete="CASCADE",
+        ),
+        index=True,
+    )
+
+    description_hash: Mapped[str] = mapped_column(
+        String(64),
+        index=True,
+    )
+
+    source_type: Mapped[str] = mapped_column(
+        String(30),
+        default="snippet",
+    )
+
+    # Exact text that was analyzed.
+    source_text: Mapped[str] = mapped_column(
+        Text
+    )
+
+    summary: Mapped[str] = mapped_column(
+        Text,
+        default="",
+    )
+
+    # Each item:
+    # {
+    #   "category": "skill",
+    #   "text": "Python"
+    # }
+    required_items: Mapped[list] = mapped_column(
+        JSON,
+        default=list,
+    )
+
+    preferred_items: Mapped[list] = mapped_column(
+        JSON,
+        default=list,
+    )
+
+    # Requirements that look relevant but
+    # are not clearly required/preferred.
+    unclassified_items: Mapped[list] = mapped_column(
+        JSON,
+        default=list,
+    )
+
+    responsibilities: Mapped[list[str]] = mapped_column(
+        JSON,
+        default=list,
+    )
+
+    extracted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
     )

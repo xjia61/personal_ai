@@ -9,8 +9,9 @@ import {
 } from "./Api";
 import JobsPage from "./components/JobsPage";
 import CareerPage from "./components/CareerPage";
-import ResumePage from "./components/Resumepage";
+import ResumePage from "./components/ResumePage";
 import "./App.css";
+import JobDetailPage from "./components/JobDetailPage";
 
 type LocalMessage = Pick<Message, "role" | "content">;
 
@@ -21,8 +22,9 @@ function App() {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<RetentionMode>("save");
   const [loading, setLoading] = useState(false);
+  const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [error, setError] = useState("");
-  const [page, setPage] = useState<"chat" | "jobs" | "career" | "resume" >("chat");
+  const [page, setPage] = useState<"chat" | "jobs" | "job-detail" | "career" | "resume" >("chat");
 
   useEffect(() => {
     refreshConversations();
@@ -35,6 +37,16 @@ function App() {
     } catch (err) {
       console.error(err);
     }
+  }
+
+  function openJob(jobId: number) {
+    setSelectedJobId(jobId);
+    setPage("job-detail");
+  }
+
+  function closeJob() {
+    setSelectedJobId(null);
+    setPage("jobs");
   }
 
   async function openConversation(id: number) {
@@ -192,8 +204,13 @@ function App() {
 
 
       {/* Main content */}
-
-      {page === "resume" ?(
+      {page === "job-detail" && selectedJobId !==null ?(
+        <JobDetailPage
+          jobId = {selectedJobId}
+          onBack={closeJob}
+        />
+        
+      ): page === "resume" ?(
         <ResumePage />
       ):page === "career" ?(
         <CareerPage />
@@ -201,9 +218,9 @@ function App() {
       ) : page === "jobs" ? (
 
         /* Jobs Page */
-        <main className="chat">
-          <JobsPage />
-        </main>
+        
+        <JobsPage onOpenJob={openJob}/>
+        
 
       ) : (
 

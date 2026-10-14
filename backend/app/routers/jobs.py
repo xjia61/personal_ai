@@ -3,14 +3,20 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Job, JobProfile
+from app.models import Job, JobProfile, JobRequirement
 
 from app.schemas import (
     JobOut,
     JobProfileOut,
     JobProfileUpdate,
+    JobRequirementOut
 )
 from app.services.job_service import search_jobs
+from app.services.job_requirement_service import(
+    build_job_source_text,
+    hash_job_description,
+    extract_job_requirements,
+)
 
 from pathlib import Path
 from uuid import uuid4
@@ -36,6 +42,17 @@ from app.services.application_service import (
 from app.schemas import (
     JobSearchRequest,
     JobOut,
+)
+
+
+from app.models.job_match import JobMatchAnalysis
+
+
+from app.services.career_match_service import (
+    analyze_career_match,
+    build_career_profile_snapshot,
+    build_requirements_text,
+    calculate_match_scores,
 )
 
 
@@ -414,7 +431,7 @@ async def update_job_status(
 
 
 @router.get(
-    "/api/jobs/{job_id}",
+    "/jobs/{job_id}",
     response_model=JobOut,
 )
 async def get_job(
@@ -430,3 +447,377 @@ async def get_job(
         )
 
     return job
+
+
+def requirement_output(
+    requirement: JobRequirement,
+    *,
+    cached: bool,
+) -> JobRequirementOut:
+
+    result = JobRequirementOut.model_validate(
+        requirement
+    )
+
+    return result.model_copy(
+        update={
+            "cached": cached
+        }
+    )
+
+@router.get(
+    "/jobs/{job_id}/requirements",
+    response_model=JobRequirementOut,
+)
+async def get_job_requirements(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+
+    job = await db.get(
+        Job,
+        job_id,
+    )
+
+    if job is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Job not found",
+        )
+
+    source_text = build_job_source_text(
+        job.title or "",
+        job.snippet or "",
+    )
+
+    description_hash = hash_job_description(
+        source_text
+    )
+
+    result = await db.execute(
+        select(JobRequirement)
+        .where(
+            JobRequirement.job_id == job_id,
+            JobRequirement.description_hash
+            == description_hash,
+        )
+    )
+
+    requirement = result.scalar_one_or_none()
+
+    if requirement is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Requirements have not been "
+                "extracted for this job."
+            ),
+        )
+
+    return requirement_output(
+        requirement,
+        cached=True,
+    )
+
+@router.post(
+    "/jobs/{job_id}/requirements",
+    response_model=JobRequirementOut,
+)
+async def analyze_job_requirements(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+
+    job = await db.get(
+        Job,
+        job_id,
+    )
+
+    if job is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Job not found",
+        )
+
+    if not (
+        job.snippet
+        and job.snippet.strip()
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This job does not have enough "
+                "description text to analyze."
+            ),
+        )
+
+    source_text = build_job_source_text(
+        job.title or "",
+        job.snippet,
+    )
+
+    description_hash = hash_job_description(
+        source_text
+    )
+
+    # --------------------------
+    # Cache check
+    # --------------------------
+
+    existing = await db.execute(
+        select(JobRequirement)
+        .where(
+            JobRequirement.job_id == job_id,
+            JobRequirement.description_hash
+            == description_hash,
+        )
+    )
+
+    cached = existing.scalar_one_or_none()
+
+    if cached is not None:
+
+        return requirement_output(
+            cached,
+            cached=True,
+        )
+
+    # --------------------------
+    # AI extraction
+    # --------------------------
+
+    extracted = (
+        await extract_job_requirements(
+            source_text
+        )
+    )
+
+    requirement = JobRequirement(
+        job_id=job_id,
+
+        description_hash=description_hash,
+
+        source_type="snippet",
+
+        source_text=source_text,
+
+        summary=extracted.summary,
+
+        required_items=[
+            item.model_dump()
+            for item
+            in extracted.required_items
+        ],
+
+        preferred_items=[
+            item.model_dump()
+            for item
+            in extracted.preferred_items
+        ],
+
+        unclassified_items=[
+            item.model_dump()
+            for item
+            in extracted.unclassified_items
+        ],
+
+        responsibilities=(
+            extracted.responsibilities
+        ),
+    )
+
+    db.add(requirement)
+
+    await db.commit()
+    await db.refresh(requirement)
+
+    return requirement_output(
+        requirement,
+        cached=False,
+    )
+
+@router.post(
+    "/jobs/{job_id}/career-match"
+)
+async def create_career_match(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    requirement_result = await db.execute(
+        select(JobRequirement)
+        .where(
+            JobRequirement.job_id == job_id
+        )
+        .order_by(
+            JobRequirement.extracted_at.desc()
+        )
+    )
+
+    requirement = (
+        requirement_result.scalars().first()
+    )
+
+    if requirement is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Extract job requirements first."
+            ),
+        )
+
+    (
+        career_profile_text,
+        career_profile_hash,
+    ) = await build_career_profile_snapshot(db)
+
+    if not career_profile_text or (
+        career_profile_text == "[]"
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Career profile is empty.",
+        )
+
+    cached_result = await db.execute(
+        select(JobMatchAnalysis).where(
+            JobMatchAnalysis.job_id
+            == job_id,
+
+            JobMatchAnalysis.job_requirement_hash
+            == requirement.description_hash,
+
+            JobMatchAnalysis.career_profile_hash
+            == career_profile_hash,
+        )
+    )
+
+    cached = (
+        cached_result.scalars().first()
+    )
+
+    if cached:
+        return {
+            **{
+                column.name:
+                getattr(cached, column.name)
+                for column
+                in cached.__table__.columns
+            },
+            "cached": True,
+        }
+
+    requirements_text = (
+        build_requirements_text(
+            requirement
+        )
+    )
+
+    result = await analyze_career_match(
+        requirements_text,
+        career_profile_text,
+    )
+
+    (
+        match_score,
+        required_score,
+        preferred_score,
+    ) = calculate_match_scores(
+        result.assessments
+    )
+
+    strengths = [
+        item.requirement_text
+        for item in result.assessments
+        if item.status == "satisfied"
+    ]
+
+    gaps = [
+        item.requirement_text
+        for item in result.assessments
+        if item.status in {
+            "missing",
+            "partial",
+        }
+    ]
+
+    unknowns = [
+        item.requirement_text
+        for item in result.assessments
+        if item.status == "unknown"
+    ]
+
+    analysis = JobMatchAnalysis(
+        job_id=job_id,
+        job_requirement_hash=(
+            requirement.description_hash
+        ),
+        career_profile_hash=(
+            career_profile_hash
+        ),
+        match_score=match_score,
+        required_score=required_score,
+        preferred_score=preferred_score,
+        summary=result.summary,
+        assessments=[
+            item.model_dump()
+            for item in result.assessments
+        ],
+        strengths=strengths,
+        gaps=gaps,
+        unknowns=unknowns,
+    )
+
+    db.add(analysis)
+
+    await db.commit()
+    await db.refresh(analysis)
+
+    return {
+        **{
+            column.name:
+            getattr(analysis, column.name)
+            for column
+            in analysis.__table__.columns
+        },
+        "cached": False,
+    }
+
+@router.get(
+    "/jobs/{job_id}/career-match"
+)
+async def get_career_match(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(JobMatchAnalysis)
+        .where(
+            JobMatchAnalysis.job_id
+            == job_id
+        )
+        .order_by(
+            JobMatchAnalysis.created_at.desc()
+        )
+    )
+
+    analysis = result.scalars().first()
+
+    if analysis is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Career match has not "
+                "been analyzed."
+            ),
+        )
+
+    return {
+        **{
+            column.name:
+            getattr(analysis, column.name)
+            for column
+            in analysis.__table__.columns
+        },
+        "cached": True,
+    }
+

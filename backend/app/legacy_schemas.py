@@ -123,7 +123,7 @@ class JobStatusUpdate(BaseModel):
         "ignored",
     ]
 
-from typing import Literal
+
 
 
 class CareerRecordCreate(BaseModel):
@@ -225,3 +225,55 @@ class JobSearchRequest(BaseModel):
     remote_ok: bool = True
 
     min_relevance_score: int = 60
+
+class RequirementItem(BaseModel):
+    category: Literal[
+        "skill",
+        "experience",
+        "education",
+        "certification",
+        "domain",
+        "other",
+    ]
+
+    text: str
+
+
+class JobRequirementExtraction(BaseModel):
+    summary: str
+
+    required_items: list[RequirementItem] = Field(
+        default_factory=list
+    )
+
+    preferred_items: list[RequirementItem] = Field(
+        default_factory=list
+    )
+
+    unclassified_items: list[RequirementItem] = Field(
+        default_factory=list
+    )
+
+    responsibilities: list[str] = Field(
+        default_factory=list
+    )
+
+
+class JobRequirementOut(
+    JobRequirementExtraction
+):
+    model_config = ConfigDict(
+        from_attributes=True
+    )
+
+    id: int
+    job_id: int
+
+    description_hash: str
+    source_type: str
+
+    extracted_at: datetime
+
+    # Tells frontend whether AI was actually
+    # called or cached result was used.
+    cached: bool = False

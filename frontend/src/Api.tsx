@@ -521,3 +521,81 @@ export async function getJob(
 
   return response.json();
 }
+
+export type RequirementCategory =
+  | "skill"
+  | "experience"
+  | "education"
+  | "certification"
+  | "domain"
+  | "other";
+
+
+export interface RequirementItem {
+  category: RequirementCategory;
+  text: string;
+}
+
+
+export interface JobRequirement {
+  id: number;
+  job_id: number;
+
+  description_hash: string;
+  source_type: string;
+
+  summary: string;
+
+  required_items: RequirementItem[];
+  preferred_items: RequirementItem[];
+  unclassified_items: RequirementItem[];
+
+  responsibilities: string[];
+
+  extracted_at: string;
+
+  cached: boolean;
+}
+
+export async function getJobRequirements(
+  jobId: number
+): Promise<JobRequirement | null> {
+
+  const response = await fetch(
+    `http://127.0.0.1:8000/api/jobs/${jobId}/requirements`
+  );
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      "Failed to load job requirements"
+    );
+  }
+
+  return response.json();
+}
+
+
+export async function analyzeJobRequirements(
+  jobId: number
+): Promise<JobRequirement> {
+
+  const response = await fetch(
+    `http://127.0.0.1:8000/api/jobs/${jobId}/requirements`,
+    {
+      method: "POST",
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      await response.text()
+    );
+  }
+
+  return response.json();
+}
+
