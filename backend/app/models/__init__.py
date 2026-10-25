@@ -12,3 +12,5 @@ from app.legacy_models import (
 )
 
 from app.models.job_match import JobMatchAnalysis
+from app.models.application import Application
+from app.models.application_profile import ApplicationProfile

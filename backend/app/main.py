@@ -7,6 +7,10 @@ from app.routers.conversations import router as conversations_router
 from app.routers.search import router as search_router
 from app.routers.jobs import router as jobs_router
 from app.routers.resumes import router as resumes_router
+from app.routers.applications import (
+    router as applications_router,
+)
+from app.routers.application_profile import router as application_profile_router
 
 from time import perf_counter
 from fastapi import Request
@@ -67,6 +71,8 @@ app.include_router(search_router)
 app.include_router(jobs_router)
 app.include_router(career_router)
 app.include_router(resumes_router)
+app.include_router(applications_router)
+app.include_router(application_profile_router)
 
 
 @app.get("/health")
