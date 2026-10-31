@@ -237,20 +237,6 @@ export async function setApplicationLink(
 }
 
 
-export async function prepareApplication(
-  jobId: number
-): Promise<{ state: string }> {
-
-  const response = await fetch(
-    `${API_URL}/jobs/${jobId}/prepare`,
-    { method: "POST" }
-  );
-
-  await checkResponse(response);
-  return response.json();
-}
-
-
 export async function updateJobStatus(
   jobId: number,
   status: string
@@ -599,3 +585,45 @@ export async function analyzeJobRequirements(
   return response.json();
 }
 
+
+
+export const applicationStatuses = ["preparing", "ready_for_review", "applied", "screening", "interview", "rejected", "offer", "withdrawn"] as const;
+export type ApplicationStatus = typeof applicationStatuses[number];
+export const statusLabel = (status: string) => status.replaceAll("_", " ").replace(/\b\w/g, c => c.toUpperCase());
+export interface ApplicationRecord {
+  id: number; job_id: number; job_title: string; company: string | null;
+  resume_version_id: number; resume_name: string; resume_version: number;
+  status: ApplicationStatus; application_url: string; created_at: string;
+}
+export interface PreparedApplication {
+  application_id: number; job_id: number; resume_version_id: number;
+  status: ApplicationStatus; application_url: string; created_at: string;
+}
+export interface AutofillResult {
+  application_id: number; status: ApplicationStatus; url: string;
+  filled_fields: string[]; skipped_fields: string[]; resume_uploaded: boolean;
+  manual_review_required: boolean;
+}
+async function applicationRequest<T>(path = "", method = "GET", body?: unknown): Promise<T> {
+  const response = await fetch(`${API_URL}/applications${path}`, {
+    method, headers: body ? {"Content-Type": "application/json"} : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!response.ok) {
+    const data: unknown = await response.json().catch(() => null);
+    const detail = data && typeof data === "object" && "detail" in data ? data.detail : null;
+    throw new Error(typeof detail === "string" ? detail : "Unable to complete application request.");
+  }
+  return response.json();
+}
+export const prepareApplication = (jobId: number, resumeId: number) =>
+  applicationRequest<PreparedApplication>("/prepare", "POST", {job_id: jobId, resume_version_id: resumeId});
+export const openApplication = (id: number) =>
+  applicationRequest<{application_id: number; status: string; url: string}>(`/${id}/open`, "POST");
+export const autofillApplication = (id: number) => applicationRequest<AutofillResult>(`/${id}/autofill`, "POST");
+export const getApplications = (jobId?: number) =>
+  applicationRequest<ApplicationRecord[]>(jobId === undefined ? "" : `?job_id=${jobId}`);
+export const getApplication = (id: number) => applicationRequest<ApplicationRecord>(`/${id}`);
+export const updateApplicationStatus = (id: number, status: ApplicationStatus) =>
+  applicationRequest<ApplicationRecord>(`/${id}/status`, "PATCH", {status});
+export const safeApplicationUrl = (url: string) => /^https?:\/\//i.test(url) ? url : undefined;

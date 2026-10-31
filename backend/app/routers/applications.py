@@ -11,7 +11,7 @@ from app.models import (
     ApplicationProfile,
 )
 from app.schemas.application import (
-    PrepareApplicationRequest,
+    PrepareApplicationRequest, ApplicationStatusUpdate, ApplicationSummary,
 )
 from app.services.browser_service import open_application_browser, resolve_application_page, autofill_application_form
 from app.services.resume_export import build_resume_pdf
@@ -28,7 +28,7 @@ async def prepare_application(
     data: PrepareApplicationRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    job = await db.get(Job, data.job_id)
+    job = await db.get(Job, data.job_id, with_for_update=True)
 
     if job is None:
         raise HTTPException(
@@ -52,6 +52,22 @@ async def prepare_application(
             status_code=400,
             detail="Resume must be approved before use.",
         )
+
+    # Serialize prepares for this job and reuse the exact selected resume.
+    existing = (await db.execute(
+        select(Application).where(
+            Application.job_id == job.id,
+            Application.resume_version_id == resume.id,
+        ).order_by(Application.id.desc())
+    )).scalars().first()
+    if existing is not None:
+        await db.commit()
+        return {
+            "application_id": existing.id, "job_id": existing.job_id,
+            "resume_version_id": existing.resume_version_id,
+            "application_url": existing.application_url,
+            "status": existing.status, "created_at": existing.created_at,
+        }
 
     application_url = (
         getattr(job, "application_url", None)
@@ -79,6 +95,46 @@ async def prepare_application(
         "status": application.status,
         "created_at": application.created_at,
     }
+
+def _summary_query():
+    return select(
+        Application.id, Application.job_id, Job.title.label("job_title"),
+        Job.company, Application.resume_version_id,
+        ResumeVersion.name.label("resume_name"),
+        ResumeVersion.version.label("resume_version"),
+        Application.status, Application.application_url, Application.created_at,
+    ).join(Job, Job.id == Application.job_id).join(
+        ResumeVersion, ResumeVersion.id == Application.resume_version_id
+    )
+
+
+@router.get("", response_model=list[ApplicationSummary])
+async def list_applications(job_id: int | None = None, db: AsyncSession = Depends(get_db)):
+    query = _summary_query().order_by(Application.created_at.desc(), Application.id.desc())
+    if job_id is not None:
+        query = query.where(Application.job_id == job_id)
+    return (await db.execute(query)).mappings().all()
+
+
+@router.get("/{application_id}", response_model=ApplicationSummary)
+async def get_application(application_id: int, db: AsyncSession = Depends(get_db)):
+    row = (await db.execute(_summary_query().where(Application.id == application_id))).mappings().first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Application not found.")
+    return row
+
+
+@router.patch("/{application_id}/status", response_model=ApplicationSummary)
+async def update_application_status(
+    application_id: int, data: ApplicationStatusUpdate, db: AsyncSession = Depends(get_db),
+):
+    application = await db.get(Application, application_id)
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found.")
+    application.status = data.status
+    await db.commit()
+    return await get_application(application_id, db)
+
 
 @router.post("/{application_id}/open")
 async def open_application(
@@ -253,7 +309,9 @@ async def autofill_application(
     ):
         application.application_url = current_url
 
-    application.status = "ready_for_review"
+    if application.status in {"preparing", "ready_for_review"}:
+        application.status = "ready_for_review"
+    autofill_result["status"] = application.status
 
     await db.commit()
     await db.refresh(application)

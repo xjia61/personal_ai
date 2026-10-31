@@ -1,3 +1,4 @@
+import ApplicationWorkflow from "./ApplicationWorkflow";
 import { useEffect, useState } from "react";
 
 import {
@@ -5,14 +6,12 @@ import {
   recommendResume,
   getJobRequirements,
   analyzeJobRequirements,
-  getResumeVersions,
 } from "../Api";
 
 import type {
   Job,
   ResumeRecommendation,
   JobRequirement,
-  ResumeVersion,
 } from "../Api";
 
 
@@ -56,12 +55,6 @@ export default function JobDetailPage({
 
     const[requirementsError, setRequirementsError] = useState("");
 
-    const [approvedResumes, setApprovedResumes] = useState<ResumeVersion[]>([]);
-
-    const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
- 
-
-  
   useEffect(() => {
 
     async function load() {
@@ -81,12 +74,6 @@ export default function JobDetailPage({
         setRequirements(
           cachedRequirements
         );
-
-        const resumes = await getResumeVersions();
-        const approved = resumes.filter(
-          (resume) =>resume.status === "approved"
-        );
-        setApprovedResumes(approved);
 
       } catch (error) {
         console.error(error);
@@ -635,61 +622,7 @@ export default function JobDetailPage({
         )}
       </section>
 
-      <section className="application-section">
-        <h2>Prepare Application</h2>
-
-        {approvedResumes.length === 0 ? (
-          <p>
-            No approved resumes available.
-            Approve a resume in the Resume Library first.
-          </p>
-        ) : (
-          <>
-            <label>
-              Resume
-            </label>
-
-            <select
-              value={selectedResumeId ?? ""}
-              onChange={(e) =>
-                setSelectedResumeId(
-                  Number(e.target.value)
-                )
-              }
-            >
-              <option value="">
-                Select a resume
-              </option>
-
-              {approvedResumes.map((resume) => (
-                <option
-                  key={resume.id}
-                  value={resume.id}
-                >
-                  {resume.name}
-                  {" "}
-                  (v{resume.version})
-                </option>
-              ))}
-            </select>
-
-            <button
-              disabled={selectedResumeId === null}
-              onClick={() => {
-                console.log(
-                  "Preparing application:",
-                  {
-                    jobId,
-                    resumeId: selectedResumeId,
-                  }
-                );
-              }}
-            >
-              Prepare Application
-            </button>
-          </>
-        )}
-      </section>
+      <ApplicationWorkflow key={jobId} jobId={jobId} />
 
 
       {error && (

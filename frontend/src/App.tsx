@@ -1,3 +1,4 @@
+import ApplicationsPage from "./components/ApplicationsPage";
 import { useEffect, useState } from "react";
 import {
   getConversation,
@@ -24,7 +25,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [error, setError] = useState("");
-  const [page, setPage] = useState<"chat" | "jobs" | "job-detail" | "career" | "resume" >("chat");
+  const [page, setPage] = useState<"chat" | "jobs" | "job-detail" | "career" | "resume" | "applications" >("chat");
 
   useEffect(() => {
     refreshConversations();
@@ -164,6 +165,9 @@ function App() {
             Resume Library
           </button>
 
+          <button onClick={() => setPage("applications")} className={page === "applications" ? "nav-active" : ""}>
+            Applications
+          </button>
         </div>
 
         {/* Chat history */}
@@ -210,6 +214,8 @@ function App() {
           onBack={closeJob}
         />
         
+      ): page === "applications" ? (
+        <ApplicationsPage onOpenJob={openJob} />
       ): page === "resume" ?(
         <ResumePage />
       ):page === "career" ?(

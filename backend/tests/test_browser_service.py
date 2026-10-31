@@ -9,6 +9,8 @@ from app.services import browser_service as service
 
 
 @pytest.mark.skipif(os.getenv("RUN_BROWSER_TESTS") != "1", reason="Set RUN_BROWSER_TESTS=1 on a host permitting Chromium launch")
+@pytest.mark.integration
+@pytest.mark.browser
 def test_browser_workflow():
     async def run():
         async with async_playwright() as pw:
@@ -59,6 +61,8 @@ def test_browser_workflow():
 
 
 @pytest.mark.skipif(os.getenv("RUN_BROWSER_TESTS") != "1", reason="Set RUN_BROWSER_TESTS=1 on a host permitting Chromium launch")
+@pytest.mark.integration
+@pytest.mark.browser
 def test_delayed_form_and_upload_safety():
     async def run():
         async with async_playwright() as pw:

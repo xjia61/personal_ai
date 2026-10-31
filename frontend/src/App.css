@@ -363,3 +363,13 @@ select {
   flex-wrap: wrap;
   gap: 10px;
 }
+
+
+.application-section { margin-top: 28px; padding: 24px; border: 1px solid #ccc; border-radius: 10px; }
+.application-section select, .applications-page select { padding: 8px; max-width: 100%; }
+.application-section button { padding: 8px 14px; }
+.application-section button:disabled, .applications-page button:disabled { opacity: .55; cursor: default; }
+.applications-page { flex: 1; min-width: 0; padding: 28px; overflow-y: auto; }
+.application-table { overflow-x: auto; margin-top: 24px; }
+.application-table table { width: 100%; border-collapse: collapse; text-align: left; }
+.application-table th, .application-table td { padding: 14px; border-bottom: 1px solid #ccc; vertical-align: top; }
