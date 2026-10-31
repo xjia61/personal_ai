@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { autofillApplication, getApplications, getResumeVersions, openApplication, prepareApplication,
+import { autofillApplication, downloadExtensionData, getApplications, getResumeVersions, openApplication, prepareApplication,
   statusLabel, updateApplicationStatus, type ApplicationStatus, type AutofillResult, type ResumeVersion } from "../Api";
 
 export default function ApplicationWorkflow({jobId}: {jobId: number}) {
@@ -62,6 +62,12 @@ export default function ApplicationWorkflow({jobId}: {jobId: number}) {
         })}>Autofill &amp; Upload Resume</button>
       </div>
       {application && <>
+        <h3>Use your own Chrome browser</h3>
+        <p>Download contact details, open the official application page in Chrome, then import the file in the Career Agent extension. The file contains your contact information. Upload the selected resume and submit manually.</p>
+        <button disabled={Boolean(busy)} onClick={() => run("Exporting contact details", async () => {
+          await downloadExtensionData(application.id);
+          setNotice("Import the downloaded JSON file in the extension. Autofill runs only when you click its Fill contact fields button.");
+        })}>Download Extension Data</button>
         <p>Status: <strong>{statusLabel(application.status)}</strong> · Application #{application.id}</p>
         <p>After you review and submit in the browser yourself, mark this application as applied.</p>
         <button disabled={Boolean(busy) || !["preparing", "ready_for_review"].includes(application.status)} onClick={() => run("Updating status", async () => {

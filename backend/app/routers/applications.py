@@ -170,6 +170,29 @@ async def open_application(
     }
 
 
+@router.get("/{application_id}/extension-data")
+async def export_extension_data(application_id: int, db: AsyncSession = Depends(get_db)):
+    """Explicit local handoff; export only safe contact fields, never work authorization."""
+    application = await db.get(Application, application_id)
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found.")
+    resume = await db.get(ResumeVersion, application.resume_version_id)
+    if resume is None or resume.status != "approved":
+        raise HTTPException(status_code=400, detail="Selected resume must be approved.")
+    profile = (await db.execute(select(ApplicationProfile).order_by(ApplicationProfile.id))).scalars().first()
+    if profile is None:
+        raise HTTPException(status_code=400, detail="Application profile has not been configured.")
+    return {
+        "format": "career-agent-autofill-v1",
+        "application_id": application.id,
+        "application_url": application.application_url,
+        "resume": {"id": resume.id, "name": resume.name, "version": resume.version},
+        "fields": {key: getattr(profile, key) for key in (
+            "first_name", "last_name", "email", "phone", "linkedin_url", "github_url", "portfolio_url",
+        )},
+    }
+
+
 @router.post(
     "/{application_id}/resolve"
 )

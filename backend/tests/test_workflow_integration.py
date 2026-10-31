@@ -110,6 +110,15 @@ def test_selected_resume_prepare_autofill_review_and_manual_tracking():
             prepared = await client.post("/api/applications/prepare", json=dict(job_id=job_id, resume_version_id=resume_id))
             assert prepared.status_code == 200, prepared.text
             application_id = prepared.json()["application_id"]
+            export = await client.get(f"/api/applications/{application_id}/extension-data")
+            assert export.status_code == 200, export.text
+            assert export.json()["resume"] == dict(id=resume_id, name="Selected", version=2)
+            assert export.json()["fields"]["email"] == "test@example.invalid"
+            assert set(export.json()["fields"]) == {
+                "first_name", "last_name", "email", "phone", "linkedin_url", "github_url", "portfolio_url",
+            }
+            assert "Selected professional history" not in export.text
+            assert (await client.get("/api/applications/999/extension-data")).status_code == 404
             again = await client.post("/api/applications/prepare", json=dict(job_id=job_id, resume_version_id=resume_id))
             assert again.json()["application_id"] == application_id
 
@@ -140,6 +149,12 @@ def test_selected_resume_prepare_autofill_review_and_manual_tracking():
             response = await client.get("/api/applications")
             assert response.json()[0]["status"] == "applied"
             assert response.json()[0]["resume_version_id"] == resume_id
+            async with sessions() as db:
+                selected = await db.get(ResumeVersion, resume_id)
+                selected.status = "draft"
+                await db.commit()
+            # Revoking approval must also prevent further extension exports.
+            assert (await client.get(f"/api/applications/{application_id}/extension-data")).status_code == 400
     asyncio.run(run())
 
 

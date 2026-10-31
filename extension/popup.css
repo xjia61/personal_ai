@@ -1,0 +1,5 @@
+body { font: 14px/1.5 system-ui, sans-serif; width: 350px; padding: 18px; color: #202b3b; }
+h1 { font-size: 21px; margin-top: 0; }
+button { margin: 12px 0 0; padding: 9px 12px; cursor: pointer; }
+input { display: block; max-width: 100%; margin-top: 8px; }
+#result { white-space: pre-line; }

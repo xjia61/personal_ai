@@ -627,3 +627,13 @@ export const getApplication = (id: number) => applicationRequest<ApplicationReco
 export const updateApplicationStatus = (id: number, status: ApplicationStatus) =>
   applicationRequest<ApplicationRecord>(`/${id}/status`, "PATCH", {status});
 export const safeApplicationUrl = (url: string) => /^https?:\/\//i.test(url) ? url : undefined;
+
+export async function downloadExtensionData(id: number) {
+  const data = await applicationRequest<unknown>(`/${id}/extension-data`);
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type: "application/json"}));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `application-${id}-autofill.json`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

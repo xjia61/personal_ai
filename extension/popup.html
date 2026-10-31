@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Career Agent Autofill</title>
+<link rel="stylesheet" href="popup.css"></head><body>
+<h1>Career Agent</h1>
+<p>Import the JSON file downloaded from your application in Career Agent.</p>
+<label>Application data <input id="handoff" type="file" accept=".json,application/json"></label>
+<p id="selection">No application selected.</p>
+<button id="fill" disabled>Fill contact fields</button>
+<button id="clear">Clear imported data</button>
+<p id="result" role="status" aria-live="polite"></p>
+<p>Greenhouse and Lever only. Existing answers are preserved. Review all fields, upload your selected resume, and submit manually.</p>
+<p>Imported details stay in this popup only and are cleared when it closes. No data is sent to Career Agent or saved by the extension.</p>
+<script type="module" src="popup.js"></script></body></html>
