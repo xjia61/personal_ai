@@ -34,7 +34,9 @@ const API_URL = "http://127.0.0.1:8000/api";
 async function checkResponse(response: Response) {
   if (!response.ok) {
     const data = await response.json().catch(() => null);
-    throw new Error(data?.detail || "Request failed");
+    const detail = data?.detail;
+    throw new Error(typeof detail === "string" ? detail : Array.isArray(detail)
+      ? detail.map((item: {msg?: string}) => item.msg || "Invalid input").join("; ") : "Request failed");
   }
 
   return response;
@@ -96,6 +98,8 @@ export interface JobProfile {
 
 export interface Job {
   id: number;
+  availability_status: "open" | "unavailable" | "unknown" | null;
+  availability_checked_at: string | null;
 
   title: string;
   company: string | null;
@@ -162,6 +166,7 @@ export interface JobSearchRequest {
   posted_within_days: number;
   remote_ok: boolean;
   min_relevance_score: number;
+  strict_dates: boolean;
 }
 
 export async function findJobs(
@@ -169,7 +174,7 @@ export async function findJobs(
 ): Promise<Job[]> {
 
   const response = await fetch(
-    "http://127.0.0.1:8000/api/jobs/search",
+    `${API_URL}/jobs/search`,
     {
       method: "POST",
       headers: {
@@ -179,9 +184,7 @@ export async function findJobs(
     }
   );
 
-  if (!response.ok) {
-    throw new Error("Job search failed");
-  }
+  await checkResponse(response);
 
   return response.json();
 }
@@ -212,6 +215,15 @@ export async function resolveJobLink(
   await checkResponse(response);
   return response.json();
 }
+
+export async function verifyJob(id: number): Promise<Job> {
+  const response = await fetch(`${API_URL}/jobs/${id}/verify`, {method: "POST"});
+  await checkResponse(response);
+  return response.json();
+}
+
+export const availabilityLabel = (job: Job) => job.availability_status === "open" ? "Verified open"
+  : job.availability_status === "unavailable" ? "Unavailable" : "Could not verify";
 
 
 export async function setApplicationLink(

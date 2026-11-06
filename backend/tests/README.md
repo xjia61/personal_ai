@@ -33,5 +33,8 @@ iframe/delayed-form discovery, resume uploads, ambiguous field handling, and lea
 sensitive fields and submission untouched. Chromium must be permitted to launch.
 
 Frontend validation runs separately from `frontend/` with `npm run build`.
-The browser extension is not implemented yet; these tests cover the current backend
-autofill workflow, not future extension permissions or authentication.
+Build the frontend before running all browser tests. The suite also loads the
+unpacked extension, tests its popup, and covers search-to-export-to-autofill using
+the built React UI and local ATS forms. See `../JOB_SEARCH.md` for the workflow
+and API/database test boundaries. Native toolbar permissions and live employer
+forms still need manual acceptance testing.

@@ -6,6 +6,8 @@ import {
 import {
   findJobs,
   getJobs,
+  availabilityLabel,
+  verifyJob,
   type Job,
 } from "../Api";
 
@@ -24,7 +26,7 @@ export default function JobsPage({
   );
 
   const [locations, setLocations] = useState(
-    "Houston, TX, Remote"
+    "Houston, TX"
   );
 
   const [days, setDays] = useState(14);
@@ -34,6 +36,7 @@ export default function JobsPage({
 
   const [remoteOK, setRemoteOK] =
     useState(true);
+  const [strictDates, setStrictDates] = useState(false);
 
   const [jobs, setJobs] =
     useState<Job[]>([]);
@@ -88,7 +91,7 @@ export default function JobsPage({
           .filter(Boolean),
 
         locations: locations
-          .split(",")
+          .split(/\r?\n/)
           .map((x) => x.trim())
           .filter(Boolean),
 
@@ -97,13 +100,14 @@ export default function JobsPage({
         remote_ok: remoteOK,
 
         min_relevance_score: minimumScore,
+        strict_dates: strictDates,
 
       });
 
       setJobs(results);
 
       setMessage(
-        `Found ${results.length} jobs.`
+        `Found ${results.length} matching postings. ${results.filter(job => job.availability_status === "open").length} verified open. Results are saved; coverage is limited to discovered Greenhouse and Lever postings.`
       );
 
     } catch (error) {
@@ -132,7 +136,7 @@ export default function JobsPage({
 
         <div>
           <h1>Job Search</h1>
-          <p>Search jobs by keywords, location, date, and relevance. </p>
+          <p>Find current Greenhouse and Lever postings, verify availability, and prepare contact autofill.</p>
         </div>
       </div>
 
@@ -150,14 +154,15 @@ export default function JobsPage({
         </label>
 
         <label>
-          Preferred locations
+          Preferred locations (one per line)
 
-          <input
+          <textarea
             value={locations}
             onChange={(e) =>
               setLocations(e.target.value)
             }
-            placeholder="Houston, TX, Remote"
+            placeholder={"Houston, TX\nChicago, IL"}
+            rows={3}
           />
         </label>
 
@@ -165,7 +170,7 @@ export default function JobsPage({
         <div className="job-options">
 
         <label>
-          Posted within
+          Publication window
 
           <select
             value={days}
@@ -176,7 +181,7 @@ export default function JobsPage({
             }
           >
             <option value={1}>
-              24 hours
+              1 day
             </option>
 
             <option value={7}>
@@ -195,7 +200,7 @@ export default function JobsPage({
 
 
         <label>
-          Minimum relevance
+          Minimum keyword relevance
 
           <select
             value={minimumScore}
@@ -241,10 +246,12 @@ export default function JobsPage({
 
           Remote OK
         </label>
+        <label><input type="checkbox" checked={strictDates} onChange={e => setStrictDates(e.target.checked)} /> Require a known publication date</label>
 
       </div>
 
 
+      <p>Unknown publication dates are included unless you require a known date. An open posting is not necessarily a newly posted job.</p>
       <button
         onClick={search}
         disabled={loading}
@@ -306,20 +313,24 @@ export default function JobsPage({
 
           {job.final_score != null && (
             <p>
-              Relevance:{" "}
+              Keyword relevance:{" "}
               <strong>
-                {job.final_score}%
+                {job.match_score}%
               </strong>
             </p>
           )}
 
 
-          {job.posted_date_text && (
-            <p>
-              Posted:{" "}
-              {job.posted_date_text}
-            </p>
-          )}
+          <p>{job.posted_date_text ? `Published: ${job.posted_date_text}` : "Posting date unknown"}</p>
+          <p><strong>{availabilityLabel(job)}</strong>{job.availability_checked_at && ` · Checked ${new Date(job.availability_checked_at).toLocaleString()}`}</p>
+          {job.availability_status !== "open" && <button disabled={loading} onClick={async () => {
+            setLoading(true);
+            try {
+              const updated = await verifyJob(job.id);
+              setJobs(current => current.map(item => item.id === updated.id ? updated : item));
+            } catch (error) {setMessage(error instanceof Error ? error.message : "Verification failed.");}
+            finally {setLoading(false);}
+          }}>Retry availability check</button>}
 
 
           <p>
@@ -339,7 +350,7 @@ export default function JobsPage({
               onOpenJob(job.id)
             }
           >
-            View Details
+            Review &amp; Prepare Application
           </button>
 
         </article>

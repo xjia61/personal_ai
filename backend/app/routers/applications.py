@@ -15,6 +15,7 @@ from app.schemas.application import (
 )
 from app.services.browser_service import open_application_browser, resolve_application_page, autofill_application_form
 from app.services.resume_export import build_resume_pdf
+from app.services.ats_postings import check_job, posting_identity
 
 
 router = APIRouter(
@@ -53,6 +54,14 @@ async def prepare_application(
             detail="Resume must be approved before use.",
         )
 
+    posting = await check_job(job)
+    # Commit verification even on rejection so the user can see why preparation failed.
+    if posting.status != "open":
+        await db.commit()
+        detail = ("This posting is no longer available." if posting.status == "unavailable"
+                  else "Unable to verify this posting. Use a supported official Greenhouse or Lever URL and retry.")
+        raise HTTPException(status_code=409, detail=detail)
+
     # Serialize prepares for this job and reuse the exact selected resume.
     existing = (await db.execute(
         select(Application).where(
@@ -61,6 +70,8 @@ async def prepare_application(
         ).order_by(Application.id.desc())
     )).scalars().first()
     if existing is not None:
+        if existing.status in {"preparing", "ready_for_review"}:
+            existing.application_url = job.application_url
         await db.commit()
         return {
             "application_id": existing.id, "job_id": existing.job_id,
@@ -182,6 +193,8 @@ async def export_extension_data(application_id: int, db: AsyncSession = Depends(
     profile = (await db.execute(select(ApplicationProfile).order_by(ApplicationProfile.id))).scalars().first()
     if profile is None:
         raise HTTPException(status_code=400, detail="Application profile has not been configured.")
+    if not posting_identity(application.application_url):
+        raise HTTPException(status_code=400, detail="Set a supported official Greenhouse or Lever application URL first.")
     return {
         "format": "career-agent-autofill-v1",
         "application_id": application.id,

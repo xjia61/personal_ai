@@ -1,25 +1,27 @@
 import { useEffect, useRef, useState } from "react";
-import { autofillApplication, downloadExtensionData, getApplications, getResumeVersions, openApplication, prepareApplication,
-  statusLabel, updateApplicationStatus, type ApplicationStatus, type AutofillResult, type ResumeVersion } from "../Api";
+import { autofillApplication, downloadExtensionData, getApplications, getResumeVersions, getJob, verifyJob, availabilityLabel, safeApplicationUrl, openApplication, prepareApplication,
+  statusLabel, updateApplicationStatus, type ApplicationStatus, type AutofillResult, type ResumeVersion, type Job } from "../Api";
 
 export default function ApplicationWorkflow({jobId}: {jobId: number}) {
   const [resumes, setResumes] = useState<ResumeVersion[]>([]);
   const [resumeId, setResumeId] = useState<number | null>(null);
-  const [application, setApplication] = useState<{id: number; status: ApplicationStatus} | null>(null);
+  const [application, setApplication] = useState<{id: number; status: ApplicationStatus; application_url: string} | null>(null);
   const [result, setResult] = useState<AutofillResult | null>(null);
   const [busy, setBusy] = useState("Loading");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [job, setJob] = useState<Job | null>(null);
   const lock = useRef(false);
   useEffect(() => {
     let active = true;
-    Promise.all([getResumeVersions(), getApplications(jobId)]).then(([versions, applications]) => {
+    Promise.all([getResumeVersions(), getApplications(jobId), getJob(jobId)]).then(([versions, applications, savedJob]) => {
       if (!active) return;
       setResumes(versions.filter(r => r.status === "approved"));
+      setJob(savedJob);
       const existing = applications[0];
       if (existing) {
         setResumeId(existing.resume_version_id);
-        setApplication({id: existing.id, status: existing.status});
+        setApplication({id: existing.id, status: existing.status, application_url: existing.application_url});
       }
     }).catch(e => {if (active) setError(e instanceof Error ? e.message : "Unable to load applications.");})
       .finally(() => {if (active) setBusy("");});
@@ -34,6 +36,14 @@ export default function ApplicationWorkflow({jobId}: {jobId: number}) {
   }
   return <section className="application-section" aria-busy={Boolean(busy)}>
     <h2>Application</h2>
+    {job && <>
+      <p><strong>{availabilityLabel(job)}</strong>{job.availability_checked_at && ` · Checked ${new Date(job.availability_checked_at).toLocaleString()}`}</p>
+      <p>{job.posted_date_text ? `Published: ${job.posted_date_text}` : "Posting date unknown"}</p>
+      <button disabled={Boolean(busy)} onClick={() => run("Checking availability", async () => {
+        setJob(await verifyJob(jobId));
+      })}>Check availability</button>
+      {job.availability_status !== "open" && <p>Verify this posting before preparing it. Unsupported URLs cannot be exported for extension autofill.</p>}
+    </>}
     {error && <p role="alert" className="error">{error}</p>}
     {busy === "Loading" ? <p>Loading applications…</p> : <>
       <label>Approved resume <select value={resumeId ?? ""} disabled={Boolean(busy)} onChange={e => {
@@ -45,16 +55,17 @@ export default function ApplicationWorkflow({jobId}: {jobId: number}) {
       </select></label>
       {!resumes.length && <p>Approve a resume in the Resume Library first.</p>}
       <div className="job-actions">
-        <button disabled={Boolean(busy) || !resumeId || Boolean(application)} onClick={() => run("Preparing", async () => {
+        <button disabled={Boolean(busy) || !resumeId || Boolean(application) || job?.availability_status === "unavailable"} onClick={() => run("Preparing", async () => {
           if (!resumeId) return;
           const prepared = await prepareApplication(jobId, resumeId);
-          setApplication({id: prepared.application_id, status: prepared.status});
-        })}>Prepare Application</button>
+          setJob(await getJob(jobId));
+          setApplication({id: prepared.application_id, status: prepared.status, application_url: prepared.application_url});
+        })}>Verify &amp; Prepare Application</button>
         <button disabled={Boolean(busy) || !application} onClick={() => run("Opening browser", async () => {
           if (!application) return;
           await openApplication(application.id);
           setNotice("Browser opened. Log in, register, dismiss popups, or navigate to the application form manually, then choose Autofill & Upload Resume.");
-        })}>Open Application</button>
+        })}>Open Local Automation Browser</button>
         <button disabled={Boolean(busy) || !application} onClick={() => run("Autofilling", async () => {
           if (!application) return;
           const filled = await autofillApplication(application.id);
@@ -68,11 +79,14 @@ export default function ApplicationWorkflow({jobId}: {jobId: number}) {
           await downloadExtensionData(application.id);
           setNotice("Import the downloaded JSON file in the extension. Autofill runs only when you click its Fill contact fields button.");
         })}>Download Extension Data</button>
+        {safeApplicationUrl(application.application_url) && <p>
+          <a href={safeApplicationUrl(application.application_url)} target="_blank" rel="noreferrer">Open Official Application ↗</a>
+        </p>}
         <p>Status: <strong>{statusLabel(application.status)}</strong> · Application #{application.id}</p>
         <p>After you review and submit in the browser yourself, mark this application as applied.</p>
         <button disabled={Boolean(busy) || !["preparing", "ready_for_review"].includes(application.status)} onClick={() => run("Updating status", async () => {
           const updated = await updateApplicationStatus(application.id, "applied");
-          setApplication({id: updated.id, status: updated.status});
+          setApplication({id: updated.id, status: updated.status, application_url: updated.application_url});
         })}>Mark as Applied</button>
       </>}
     </>}

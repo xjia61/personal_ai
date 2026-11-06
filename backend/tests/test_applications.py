@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -68,7 +68,7 @@ def test_prepare_reuses_exact_application():
     existing = SimpleNamespace(**{k: v for k, v in summary('applied').items() if k in {'id', 'job_id', 'resume_version_id', 'status', 'application_url', 'created_at'}})
     db = SimpleNamespace(get=AsyncMock(side_effect=[SimpleNamespace(id=5), SimpleNamespace(id=2, status='approved')]),
         execute=AsyncMock(return_value=SimpleNamespace(scalars=lambda: SimpleNamespace(first=lambda: existing))), commit=AsyncMock())
-    with client_for(db) as client:
+    with patch('app.routers.applications.check_job', new=AsyncMock(return_value=SimpleNamespace(status='open'))), client_for(db) as client:
         response = client.post('/api/applications/prepare', json={'job_id': 5, 'resume_version_id': 2})
         assert response.status_code == 200
         assert response.json()['application_id'] == 1

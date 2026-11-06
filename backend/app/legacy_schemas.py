@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ChatRequest(BaseModel):
@@ -83,6 +83,8 @@ class JobOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    availability_status: str | None = None
+    availability_checked_at: datetime | None = None
     title: str
     company: str | None
     location: str | None
@@ -212,19 +214,22 @@ class ResumeRecommendationOut(BaseModel):
     matched_skills: list[str]
 
 class JobSearchRequest(BaseModel):
-    keywords: list[str] = Field(
-        default_factory=list
-    )
-
-    locations: list[str] = Field(
-        default_factory=list
-    )
-
-    posted_within_days: int = 14
-
+    keywords: list[str] = Field(min_length=1, max_length=4)
+    locations: list[str] = Field(default_factory=list, max_length=4)
+    posted_within_days: int = Field(default=14, ge=1, le=90)
     remote_ok: bool = True
+    min_relevance_score: int = Field(default=60, ge=0, le=100)
+    strict_dates: bool = False
 
-    min_relevance_score: int = 60
+    @field_validator("keywords", "locations")
+    @classmethod
+    def clean_terms(cls, values, info):
+        terms = list(dict.fromkeys(value.strip() for value in values if value.strip()))
+        if info.field_name == "keywords" and not terms:
+            raise ValueError("Enter at least one job keyword.")
+        if any(len(term) > 100 for term in terms):
+            raise ValueError("Each search term must be at most 100 characters.")
+        return terms
 
 class RequirementItem(BaseModel):
     category: Literal[

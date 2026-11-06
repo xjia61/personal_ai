@@ -272,9 +272,9 @@ export default function JobDetailPage({
 
         {job.final_score != null ? (
           <p>
-            Overall Match:{" "}
+            Keyword relevance:{" "}
             <strong>
-              {job.final_score}
+              {job.match_score}%
             </strong>
           </p>
         ) : (

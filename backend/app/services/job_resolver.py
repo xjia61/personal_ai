@@ -1,7 +1,6 @@
 import re
 from urllib.parse import urlparse
 
-import httpx
 
 from app.services.search_service import search_web
 
@@ -123,63 +122,13 @@ def title_matches(expected: str, actual: str) -> bool:
     )
 
 
-async def verify_ats(
-    url: str,
-    expected_title: str,
-):
-    info = ats_info(url)
-
-    if info is None:
-        return None, "needs_review"
-
-    provider, site, job_id, api_host = info
-
-    if provider == "greenhouse":
-        api_url = (
-            f"{api_host}/v1/boards/"
-            f"{site}/jobs/{job_id}"
-        )
-    else:
-        api_url = (
-            f"{api_host}/v0/postings/"
-            f"{site}/{job_id}"
-        )
-
-    try:
-        async with httpx.AsyncClient(
-            timeout=12.0,
-            follow_redirects=False,
-        ) as client:
-            response = await client.get(api_url)
-
-    except httpx.HTTPError:
-        return None, "needs_review"
-
-    if response.status_code == 404:
+async def verify_ats(url: str, expected_title: str):
+    from app.services.ats_postings import fetch_posting
+    posting = await fetch_posting(url)
+    if posting.status == "unavailable":
         return None, "unavailable"
-
-    if response.status_code != 200:
-        return None, "needs_review"
-
-    data = response.json()
-
-    if not title_matches(
-        expected_title,
-        data.get("title", data.get("text", "")),
-    ):
-        return None, "needs_review"
-
-    if provider == "greenhouse":
-        final_url = data.get("absolute_url")
-    else:
-        final_url = (
-            data.get("applyUrl")
-            or data.get("hostedUrl")
-        )
-
-    if final_url and safe_https_url(final_url):
-        return final_url, "verified_ats"
-
+    if posting.status == "open" and title_matches(expected_title, posting.title):
+        return posting.application_url, "verified_ats"
     return None, "needs_review"
 
 

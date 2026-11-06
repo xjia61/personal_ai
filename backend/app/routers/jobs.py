@@ -12,6 +12,8 @@ from app.schemas import (
     JobRequirementOut
 )
 from app.services.job_service import search_jobs
+from app.services.ats_postings import check_job
+from app.services.search_service import WebSearchError
 from app.services.job_requirement_service import(
     build_job_source_text,
     hash_job_description,
@@ -143,14 +145,12 @@ async def run_job_search(
     data: JobSearchRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    return await search_jobs(
-        db=db,
-        keywords=data.keywords,
-        locations=data.locations,
-        posted_within_days=data.posted_within_days,
-        remote_ok=data.remote_ok,
-        min_relevance_score=data.min_relevance_score,
-    )
+    try:
+        return await search_jobs(db=db, **data.model_dump())
+    except WebSearchError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     
 
@@ -174,6 +174,17 @@ async def list_jobs(
     )
 
     return list(result.scalars().all())
+
+
+@router.post("/jobs/{job_id}/verify", response_model=JobOut)
+async def verify_job(job_id: int, db: AsyncSession = Depends(get_db)):
+    job = await db.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    await check_job(job)
+    await db.commit()
+    await db.refresh(job)
+    return job
 
 @router.post("/job-profile/resume")
 async def upload_resume(
